@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Inventario y Entregas (Nube)</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+    <!-- PANTALLA DE LOGIN -->
+    <section id="login-screen" class="centered-container">
+        <div class="card login-card">
+            <h1>Acceso al Sistema</h1>
+            <p class="subtitle">Conectado a la nube (Supabase)</p>
+            <div class="file-bar">
+                <span id="status-nube-login" class="status-badge">Verificando conexion...</span>
+            </div>
+
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-usuario">Usuario</label>
+                    <input type="text" id="login-usuario" placeholder="Ej. admin (o escribe 'salir')" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-clave">Clave</label>
+                    <input type="password" id="login-clave" placeholder="Ingresa tu clave">
+                </div>
+                <p id="login-error" class="error-msg"></p>
+                <div class="btn-row">
+                    <button type="submit" id="btn-entrar" class="btn btn-primary">Iniciar sesion</button>
+                    <button type="button" id="btn-salir-login" class="btn btn-danger">Salir</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <!-- PANTALLA DE SALIDA -->
+    <section id="exit-screen" class="centered-container hidden">
+        <div class="card login-card">
+            <h2>Sesion finalizada</h2>
+            <p class="subtitle">Has salido del sistema de inventario.</p>
+            <button type="button" id="btn-volver-login" class="btn btn-primary btn-full">Volver al acceso</button>
+        </div>
+    </section>
+
+    <!-- APLICACION PRINCIPAL -->
+    <div id="app-screen" class="hidden">
+        <header class="topbar">
+            <div>
+                <h2>Control de Inventario y Entregas</h2>
+                <span class="status-badge connected">Sincronizado con Supabase</span>
+            </div>
+            <div class="topbar-actions">
+                <button id="btn-sincronizar" class="btn btn-secondary">Actualizar datos</button>
+                <button id="btn-cerrar-sesion" class="btn btn-danger">Salir</button>
+            </div>
+        </header>
+
+        <main class="container">
+            <div id="alerta-global" class="alerta hidden"></div>
+
+            <div class="grid-2">
+                <!-- REGISTRAR PRODUCTO -->
+                <section class="card">
+                    <h3>Registrar Producto</h3>
+                    <form id="form-producto">
+                        <div class="form-group">
+                            <label for="prod-id">ID del Producto</label>
+                            <input type="text" id="prod-id" placeholder="Ej. P#01" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="prod-nombre">Nombre (sin espacios)</label>
+                            <input type="text" id="prod-nombre" placeholder="Ej. harina" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="prod-cantidad">Cantidad</label>
+                            <input type="number" id="prod-cantidad" step="0.01" min="0" placeholder="Ej. 15" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full">Guardar en la Nube</button>
+                    </form>
+                </section>
+
+                <!-- LISTA DE VENTA -->
+                <section class="card">
+                    <h3>Lista de Venta / Entrega</h3>
+                    <form id="form-lista">
+                        <div class="form-group">
+                            <label for="lista-producto">Producto</label>
+                            <select id="lista-producto" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="lista-cantidad">Cantidad a llevar</label>
+                            <input type="number" id="lista-cantidad" min="1" step="1" required>
+                        </div>
+                        <button type="submit" class="btn btn-secondary btn-full">Agregar a la Lista</button>
+                    </form>
+
+                    <div class="table-wrapper small-gap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Producto</th>
+                                    <th>Cant.</th>
+                                    <th>Accion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-lista"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="form-group small-gap">
+                        <label for="cliente-nombre">Nombre del Cliente (para recibo)</label>
+                        <input type="text" id="cliente-nombre" placeholder="Ej. Maria Gomez">
+                    </div>
+                    <button id="btn-procesar-entrega" class="btn btn-success btn-full">
+                        Procesar Entrega y Generar Recibo PDF
+                    </button>
+                </section>
+            </div>
+
+            <!-- INVENTARIO -->
+            <section class="card">
+                <div class="card-header">
+                    <h3>Inventario en la Nube</h3>
+                    <div class="action-group">
+                        <input type="file" id="input-importar-inv" accept=".txt" class="hidden">
+                        <button id="btn-importar-inv" class="btn btn-outline">Subir .txt a la nube</button>
+                        <button id="btn-exportar-inv" class="btn btn-primary">Exportar .txt</button>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Cantidad Disponible</th>
+                                <th>Accion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-inventario"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- HISTORIAL DE ENTREGAS -->
+            <section class="card">
+                <div class="card-header">
+                    <h3>Historial de Entregas en la Nube</h3>
+                    <div class="action-group">
+                        <input type="file" id="input-importar-ent" accept=".txt" class="hidden">
+                        <button id="btn-importar-ent" class="btn btn-outline">Subir .txt a la nube</button>
+                        <button id="btn-exportar-ent" class="btn btn-primary">Exportar .txt</button>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID Entrega</th>
+                                <th>Fecha</th>
+                                <th>Cliente</th>
+                                <th>Productos Entregados</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-entregas"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
