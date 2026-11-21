@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
-
+//saul
 #define MAX_LETRAS_NOMBRE 30
 #define MAX_LETRAS_DESCRIPCION 200
 #define MAX_OBJETOS 1000
