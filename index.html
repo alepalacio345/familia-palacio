@@ -63,9 +63,9 @@
             <div id="alerta-global" class="alerta hidden"></div>
 
             <div class="grid-2">
-                <!-- REGISTRAR PRODUCTO -->
-                <section class="card">
-                    <h3>Registrar Producto</h3>
+                <!-- REGISTRAR / EDITAR PRODUCTO -->
+                <section id="card-producto" class="card">
+                    <h3 id="titulo-form-producto">Registrar Producto</h3>
                     <form id="form-producto">
                         <div class="form-group">
                             <label for="prod-id">ID del Producto</label>
@@ -75,15 +75,24 @@
                             <label for="prod-nombre">Nombre (sin espacios)</label>
                             <input type="text" id="prod-nombre" placeholder="Ej. harina" required>
                         </div>
-                        <div class="form-group">
-                            <label for="prod-cantidad">Cantidad</label>
-                            <input type="number" id="prod-cantidad" step="0.01" min="0" placeholder="Ej. 15" required>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="prod-cantidad">Cantidad</label>
+                                <input type="number" id="prod-cantidad" step="0.01" min="0" placeholder="Ej. 15" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="prod-precio">Precio Unitario ($)</label>
+                                <input type="number" id="prod-precio" step="0.01" min="0" placeholder="Ej. 2.50" required>
+                            </div>
                         </div>
-                        <button type="submit" class="btn btn-primary btn-full">Guardar en la Nube</button>
+                        <div class="btn-row">
+                            <button type="submit" id="btn-guardar-producto" class="btn btn-primary">Guardar en la Nube</button>
+                            <button type="button" id="btn-cancelar-edicion" class="btn btn-outline hidden">Cancelar</button>
+                        </div>
                     </form>
                 </section>
 
-                <!-- LISTA DE VENTA -->
+                <!-- LISTA DE VENTA Y DATOS DEL RECIBO -->
                 <section class="card">
                     <h3>Lista de Venta / Entrega</h3>
                     <form id="form-lista">
@@ -93,7 +102,7 @@
                         </div>
                         <div class="form-group">
                             <label for="lista-cantidad">Cantidad a llevar</label>
-                            <input type="number" id="lista-cantidad" min="1" step="1" required>
+                            <input type="number" id="lista-cantidad" min="0.01" step="0.01" placeholder="Ej. 2" required>
                         </div>
                         <button type="submit" class="btn btn-secondary btn-full">Agregar a la Lista</button>
                     </form>
@@ -105,6 +114,8 @@
                                     <th>ID</th>
                                     <th>Producto</th>
                                     <th>Cant.</th>
+                                    <th>P. Unit.</th>
+                                    <th>Subtotal</th>
                                     <th>Accion</th>
                                 </tr>
                             </thead>
@@ -112,10 +123,27 @@
                         </table>
                     </div>
 
-                    <div class="form-group small-gap">
-                        <label for="cliente-nombre">Nombre del Cliente (para recibo)</label>
-                        <input type="text" id="cliente-nombre" placeholder="Ej. Maria Gomez">
+                    <div class="total-banner">
+                        <span>Total del Recibo:</span>
+                        <strong id="total-lista">$0.00</strong>
                     </div>
+
+                    <div class="form-row-2 small-gap">
+                        <div class="form-group">
+                            <label for="cliente-nombre">Nombre del Cliente</label>
+                            <input type="text" id="cliente-nombre" placeholder="Ej. Maria Gomez">
+                        </div>
+                        <div class="form-group">
+                            <label for="cliente-cedula">Cedula del Cliente</label>
+                            <input type="text" id="cliente-cedula" placeholder="Ej. V-25123456">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cliente-lugar">Lugar de Entrega</label>
+                        <input type="text" id="cliente-lugar" placeholder="Ej. Av. Bolivar, Valencia">
+                    </div>
+
                     <button id="btn-procesar-entrega" class="btn btn-success btn-full">
                         Procesar Entrega y Generar Recibo PDF
                     </button>
@@ -139,7 +167,8 @@
                                 <th>ID</th>
                                 <th>Nombre</th>
                                 <th>Cantidad Disponible</th>
-                                <th>Accion</th>
+                                <th>Precio Unit.</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-inventario"></tbody>
@@ -163,8 +192,10 @@
                             <tr>
                                 <th>ID Entrega</th>
                                 <th>Fecha</th>
-                                <th>Cliente</th>
-                                <th>Productos Entregados</th>
+                                <th>Cliente / Cedula</th>
+                                <th>Lugar de Entrega</th>
+                                <th>Productos</th>
+                                <th>Total</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -175,6 +206,6 @@
         </main>
     </div>
 
-    <script src="app.js"></script>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
