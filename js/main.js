@@ -8,7 +8,7 @@
 
 import { iniciarSupabase } from "./config.js";
 import { inicializarAuth } from "./auth.js";
-import { cargarInventario, inicializarInventario } from "./inventario.js";
+import { cargarInventario, inicializarInventario, cargarPapelera } from "./inventario.js";
 import { cargarEntregas, inicializarEntregas } from "./entregas.js";
 import { cargarReventas, inicializarReventas, aplicarVistaReventasPorRol, renderizarFormularioReventa } from "./reventas.js";
 import { cargarStockRevendedora } from "./stock.js";
@@ -29,6 +29,7 @@ async function cargarDatosNube() {
     // 2. Todos los datos de la nube, en paralelo.
     await Promise.all([
         cargarInventario(),       // Inventario principal.
+        cargarPapelera(),         // Papelera (productos eliminados).
         cargarEntregas(),         // Entregas del admin.
         cargarReventas(),         // Reventas de la revendedora.
         cargarStockRevendedora(), // Stock disponible para revender.

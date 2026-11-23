@@ -348,6 +348,9 @@
                         <button id="btn-registrar-reventa" class="btn btn-success btn-full">
                             Registrar Reventa y Generar Recibo PDF
                         </button>
+                        <button id="btn-cancelar-edicion-reventa" class="btn btn-outline btn-full hidden" style="margin-top: 0.5rem;">
+                            Cancelar edición
+                        </button>
                     </div>
 
                     <!-- Filtros del historial de reventas (SOLO admin) -->
@@ -506,6 +509,29 @@
                                 </tr>
                             </thead>
                             <tbody id="tbody-caja"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ---------- PANEL: PAPELERA (admin) ---------- -->
+                <section id="panel-papelera" class="card panel hidden">
+                    <div class="card-header">
+                        <h3>Papelera (productos eliminados)</h3>
+                    </div>
+                    <p class="subtitle">Los productos que "eliminas" del inventario se guardan aquí para que puedas recuperarlos si te equivocaste.</p>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre</th>
+                                    <th>Cantidad</th>
+                                    <th>Precio (USD)</th>
+                                    <th>Eliminado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-papelera"></tbody>
                         </table>
                     </div>
                 </section>

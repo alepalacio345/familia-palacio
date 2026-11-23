@@ -93,12 +93,67 @@ function salirModoEdicion() {
 }
 
 // ----------------------------------------------------------------------------
+// obtenerFechaFormateada()
+// Fecha y hora actual "YYYY-MM-DD HH:mm".
+// ----------------------------------------------------------------------------
+function obtenerFechaFormateada() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ----------------------------------------------------------------------------
+// cargarPapelera()
+// Trae la papelera (productos eliminados) desde Supabase.
+// ----------------------------------------------------------------------------
+export async function cargarPapelera() {
+    const { data, error } = await db
+        .from("papelera")
+        .select("id, product_id, name, cantidad, precio, fecha_eliminado, usuario")
+        .order("creado_en", { ascending: false });
+
+    if (error) {
+        console.warn("Error cargando la papelera:", error.message);
+        return false;
+    }
+
+    state.papelera = (data || []).map(p => ({
+        ...p,
+        cantidad: Number(p.cantidad ?? 0),
+        precio: Number(p.precio ?? 0),
+    }));
+
+    return true;
+}
+
+// ----------------------------------------------------------------------------
 // eliminarProductoInventario(id)
-// Borra un producto del inventario en Supabase y refresca la pantalla.
+// "Elimina" un producto SIN borrarlo de verdad: lo mueve a la PAPELERA.
+// Asi el admin puede recuperarlo si se equivoco.
 // ----------------------------------------------------------------------------
 async function eliminarProductoInventario(id) {
     if (!esAdmin()) return;
 
+    const prod = state.inventario.find(p => p.id === id);
+
+    // 1. Guardamos una copia en la papelera ANTES de borrar.
+    if (prod) {
+        const { error: errPapelera } = await db.from("papelera").insert([{
+            product_id: prod.id,
+            name: prod.name,
+            cantidad: prod.cantidad,
+            precio: prod.precio,
+            fecha_eliminado: obtenerFechaFormateada(),
+            usuario: state.usuarioActual?.usuario || "admin",
+        }]);
+
+        if (errPapelera) {
+            mostrarAlerta(`No se pudo mover a la papelera: ${errPapelera.message}`, "err");
+            return;
+        }
+    }
+
+    // 2. Borramos del inventario principal.
     const { error } = await db
         .from("inventario")
         .delete()
@@ -111,9 +166,64 @@ async function eliminarProductoInventario(id) {
 
     if (state.idEditando === id) salirModoEdicion();
     state.listaVenta = state.listaVenta.filter(item => item.id !== id);
-    await cargarInventario();
+
+    await Promise.all([cargarInventario(), cargarPapelera()]);
     renderizarTodo();
-    mostrarAlerta(`Producto ${id} eliminado de la nube.`, "ok");
+    mostrarAlerta(`Producto ${id} movido a la papelera (puedes restaurarlo).`, "ok");
+}
+
+// ----------------------------------------------------------------------------
+// restaurarProducto(idPapelera)
+// Devuelve un producto de la papelera al inventario.
+// Si el ID ya existe en el inventario, avisa para que no haya duplicados.
+// ----------------------------------------------------------------------------
+async function restaurarProducto(idPapelera) {
+    if (!esAdmin()) return;
+
+    const fila = state.papelera.find(p => String(p.id) === String(idPapelera));
+    if (!fila) return;
+
+    // Evitamos duplicar un ID que ya exista en el inventario.
+    if (state.inventario.some(p => p.id === fila.product_id)) {
+        mostrarAlerta(`Ya existe un producto con el ID ${fila.product_id}. Cambia ese ID antes de restaurar.`, "err");
+        return;
+    }
+
+    const { error } = await db.from("inventario").insert([{
+        id: fila.product_id,
+        name: fila.name,
+        cantidad: fila.cantidad,
+        precio: fila.precio,
+    }]);
+
+    if (error) {
+        mostrarAlerta(`No se pudo restaurar: ${error.message}`, "err");
+        return;
+    }
+
+    // Lo quitamos de la papelera y recargamos.
+    await db.from("papelera").delete().eq("id", idPapelera);
+    await Promise.all([cargarInventario(), cargarPapelera()]);
+    renderizarTodo();
+    mostrarAlerta(`Producto ${fila.product_id} restaurado al inventario.`, "ok");
+}
+
+// ----------------------------------------------------------------------------
+// eliminarDefinitivo(idPapelera)
+// Borra PARA SIEMPRE un producto de la papelera (sin opcion de recuperar).
+// ----------------------------------------------------------------------------
+async function eliminarDefinitivo(idPapelera) {
+    if (!esAdmin()) return;
+
+    const { error } = await db.from("papelera").delete().eq("id", idPapelera);
+    if (error) {
+        mostrarAlerta(`Error eliminando: ${error.message}`, "err");
+        return;
+    }
+
+    await cargarPapelera();
+    renderizarTodo();
+    mostrarAlerta("Producto eliminado definitivamente de la papelera.", "ok");
 }
 
 // ----------------------------------------------------------------------------
@@ -284,5 +394,16 @@ export function inicializarInventario() {
             e.target.value = "";
         };
         reader.readAsText(archivo, "UTF-8");
+    });
+
+    // --- Acciones de la PAPELERA (restaurar / eliminar definitivo) ---
+    document.getElementById("tbody-papelera").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+        if (btn.dataset.action === "restaurar") {
+            restaurarProducto(btn.dataset.id);
+        } else if (btn.dataset.action === "borrar-def") {
+            eliminarDefinitivo(btn.dataset.id);
+        }
     });
 }

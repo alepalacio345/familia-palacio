@@ -245,7 +245,7 @@ export function inicializarReventas() {
     document.getElementById("rev-tipo-pago").addEventListener("change", ajustarMonedaPorTipoPago);
     document.getElementById("rev-moneda").addEventListener("change", renderizarFormularioReventa);
 
-    // --- Registrar la reventa ---
+    // --- Registrar (o actualizar) la reventa ---
     document.getElementById("btn-registrar-reventa").addEventListener("click", async () => {
         if (state.listaReventa.length === 0) {
             mostrarAlerta("Agrega al menos un producto al carrito de la reventa.", "err");
@@ -265,8 +265,16 @@ export function inicializarReventas() {
             return;
         }
 
-        // Revalidamos stock fresco antes de registrar.
+        // Revalidamos stock fresco antes de guardar.
         await cargarStockRevendedora();
+
+        // --- Caso A: estamos EDITANDO una reventa existente ---
+        if (state.reventaEditandoId) {
+            await actualizarReventa(state.reventaEditandoId, { cliente, cedula, tipoPago, moneda, pendiente, fechaPago, comoPagara });
+            return;
+        }
+
+        // --- Caso B: reventa NUEVA ---
         const itemsConfirmados = [];
         for (const item of state.listaReventa) {
             const stock = state.stockRevendedora.find(s => s.product_id === item.id);
@@ -318,12 +326,7 @@ export function inicializarReventas() {
         generarReciboReventaPDF(nuevaReventa, itemsConfirmados);
 
         // Limpiar y recargar.
-        state.listaReventa = [];
-        document.getElementById("rev-cliente").value = "";
-        document.getElementById("rev-cedula").value = "";
-        document.getElementById("rev-fecha-pago").value = "";
-        document.getElementById("rev-pendiente").checked = false;
-        actualizarBloquePago();
+        limpiarFormularioReventa();
 
         await Promise.all([cargarReventas(), cargarStockRevendedora()]);
         renderizarTodo();
@@ -331,7 +334,10 @@ export function inicializarReventas() {
         mostrarAlerta(`Reventa ${nuevaReventa.id} registrada y stock descontado.`, "ok");
     });
 
-    // --- Acciones del historial (PDF / Eliminar) ---
+    // --- Cancelar la edicion de una reventa ---
+    document.getElementById("btn-cancelar-edicion-reventa").addEventListener("click", salirModoEdicionReventa);
+
+    // --- Acciones del historial (PDF / Editar / Eliminar) ---
     document.getElementById("tbody-reventas").addEventListener("click", async (e) => {
         const btn = e.target.closest("button[data-action]");
         if (!btn) return;
@@ -339,6 +345,8 @@ export function inicializarReventas() {
         if (btn.dataset.action === "pdf-rev") {
             const reventa = state.reventas.find(r => r.id === btn.dataset.id);
             if (reventa) generarReciboReventaPDF(reventa);
+        } else if (btn.dataset.action === "edit-rev") {
+            cargarReventaEnFormulario(btn.dataset.id);
         } else if (btn.dataset.action === "del-rev") {
             await eliminarReventa(btn.dataset.id);
         }
@@ -347,6 +355,173 @@ export function inicializarReventas() {
     // --- Filtros del historial de reventas ---
     document.getElementById("btn-filtrar-rev").addEventListener("click", aplicarFiltrosDesdeUI);
     document.getElementById("btn-limpiar-rev").addEventListener("click", limpiarFiltrosReventas);
+}
+
+// ----------------------------------------------------------------------------
+// parsearItemsDesdeDetalle(detalle)
+// Convierte "2x arroz(P#01) @$3.50, 1x aceite(P#02) @$2.00" en una lista
+// de items [{ id, name, cantidad, precio }]. Se usa para editar/eliminar.
+// ----------------------------------------------------------------------------
+function parsearItemsDesdeDetalle(detalle) {
+    return String(detalle || "").split(",").map(bloque => {
+        const texto = bloque.trim();
+        const conPrecio = texto.match(/^([\d.]+)x\s+(.+)\((.+)\)\s+@\$([\d.]+)$/);
+        if (conPrecio) {
+            return { id: conPrecio[3], name: conPrecio[2], cantidad: parseFloat(conPrecio[1]), precio: parseFloat(conPrecio[4]) };
+        }
+        const sinPrecio = texto.match(/^([\d.]+)x\s+(.+)\((.+)\)$/);
+        if (sinPrecio) {
+            return { id: sinPrecio[3], name: sinPrecio[2], cantidad: parseFloat(sinPrecio[1]), precio: 0 };
+        }
+        return null;
+    }).filter(Boolean);
+}
+
+// ----------------------------------------------------------------------------
+// limpiarFormularioReventa()
+// Vacia el carrito y los campos del formulario de reventa (sin tocar el modo
+// de edicion, para eso esta salirModoEdicionReventa).
+// ----------------------------------------------------------------------------
+function limpiarFormularioReventa() {
+    state.listaReventa = [];
+    document.getElementById("rev-cliente").value = "";
+    document.getElementById("rev-cedula").value = "";
+    document.getElementById("rev-fecha-pago").value = "";
+    document.getElementById("rev-pendiente").checked = false;
+    actualizarBloquePago();
+}
+
+// ----------------------------------------------------------------------------
+// cargarReventaEnFormulario(id)
+// Carga una reventa existente en el formulario para que la revendedora la
+// pueda EDITAR. Guarda el id en state.reventaEditandoId.
+// ----------------------------------------------------------------------------
+function cargarReventaEnFormulario(id) {
+    const reventa = state.reventas.find(r => r.id === id);
+    if (!reventa) return;
+
+    // Solo la revendedora que la hizo puede editarla.
+    if (esAdmin() || reventa.usuario !== state.usuarioActual?.usuario) {
+        mostrarAlerta("No tienes permiso para editar esta reventa.", "err");
+        return;
+    }
+
+    // Cargamos los productos en el carrito (con el precio que tenian).
+    state.listaReventa = parsearItemsDesdeDetalle(reventa.detalle).map(item => ({
+        id: item.id,
+        name: item.name,
+        cantidad: item.cantidad,
+        precio: item.precio || (state.inventario.find(p => p.id === item.id)?.precio ?? 0),
+    }));
+
+    // Cargamos los datos del comprador y del pago.
+    document.getElementById("rev-cliente").value = reventa.cliente || "";
+    document.getElementById("rev-cedula").value = reventa.cedula || "";
+    document.getElementById("rev-tipo-pago").value = reventa.tipo_pago || "divisa";
+    document.getElementById("rev-moneda").value = reventa.moneda || "USD";
+    document.getElementById("rev-pendiente").checked = !!reventa.pendiente;
+    document.getElementById("rev-fecha-pago").value = reventa.fecha_pago || "";
+    document.getElementById("rev-como-pagara").value = reventa.como_pagara || "divisa";
+
+    // Cambiamos el boton y mostramos "Cancelar edicion".
+    state.reventaEditandoId = id;
+    document.getElementById("btn-registrar-reventa").textContent = "Actualizar Reventa";
+    document.getElementById("btn-cancelar-edicion-reventa").classList.remove("hidden");
+
+    actualizarBloquePago();
+    renderizarFormularioReventa();
+
+    document.getElementById("reventa-form-wrap").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// ----------------------------------------------------------------------------
+// salirModoEdicionReventa()
+// Cancela la edicion: limpia el formulario y vuelve al modo "registrar nueva".
+// ----------------------------------------------------------------------------
+function salirModoEdicionReventa() {
+    state.reventaEditandoId = null;
+    limpiarFormularioReventa();
+    document.getElementById("btn-registrar-reventa").textContent = "Registrar Reventa y Generar Recibo PDF";
+    document.getElementById("btn-cancelar-edicion-reventa").classList.add("hidden");
+    renderizarFormularioReventa();
+}
+
+// ----------------------------------------------------------------------------
+// actualizarReventa(id, datos)
+// Guarda los cambios de una reventa que se esta editando.
+// Reconciliacion del stock:
+//   1) Devolvemos al stock los productos de la reventa ANTERIOR.
+//   2) Descontamos los productos de la reventa NUEVA.
+// Asi el stock queda exacto sin duplicar ni perder nada.
+// ----------------------------------------------------------------------------
+async function actualizarReventa(id, datos) {
+    const reventaOriginal = state.reventas.find(r => r.id === id);
+    if (!reventaOriginal) return;
+
+    const viejosItems = parsearItemsDesdeDetalle(reventaOriginal.detalle);
+    const nuevosItems = state.listaReventa.map(i => ({ ...i }));
+
+    // Validamos contra el stock actual + lo que vamos a devolver del anterior.
+    await cargarStockRevendedora();
+    for (const item of nuevosItems) {
+        const stock = state.stockRevendedora.find(s => s.product_id === item.id);
+        const actual = stock ? stock.cantidad : 0;
+        const viejo = viejosItems.find(v => v.id === item.id);
+        const viejoCant = viejo ? viejo.cantidad : 0;
+        if (actual + viejoCant < item.cantidad) {
+            mostrarAlerta(`Stock insuficiente de ${item.name} para la edicion.`, "err");
+            return;
+        }
+    }
+
+    // Recalculamos totales.
+    const totalUsd = Number(nuevosItems.reduce((acc, i) => acc + i.cantidad * i.precio, 0).toFixed(2));
+    const tasa = obtenerTasa(datos.moneda);
+    const monto = convertirDesdeUsd(totalUsd, datos.moneda);
+    const montoBs = convertirDesdeUsd(totalUsd, "VES");
+
+    // 1. Devolvemos el stock de la reventa anterior.
+    for (const v of viejosItems) {
+        await sumarStock(v.id, v.name, v.cantidad);
+    }
+
+    // 2. Descontamos el stock de la reventa nueva.
+    for (const item of nuevosItems) {
+        await restarStock(item.id, item.cantidad);
+    }
+
+    // 3. Actualizamos el registro en Supabase.
+    const actualizada = {
+        cliente: datos.cliente,
+        cedula: datos.cedula,
+        tipo_pago: datos.tipoPago,
+        moneda: datos.moneda,
+        monto,
+        monto_bs: montoBs,
+        tasa: tasa ?? 0,
+        total_usd: totalUsd,
+        pendiente: datos.pendiente,
+        fecha_pago: datos.pendiente ? datos.fechaPago : "",
+        como_pagara: datos.pendiente ? datos.comoPagara : "",
+        detalle: nuevosItems.map(i => `${i.cantidad}x ${i.name}(${i.id}) @$${i.precio.toFixed(2)}`).join(", "),
+    };
+
+    const { error } = await db.from("reventas").update(actualizada).eq("id", id);
+    if (error) {
+        mostrarAlerta(`Error actualizando la reventa: ${error.message}`, "err");
+        return;
+    }
+
+    // 4. Generamos el PDF actualizado.
+    const reventaParaPdf = { ...reventaOriginal, ...actualizada, id };
+    generarReciboReventaPDF(reventaParaPdf, nuevosItems);
+
+    // 5. Salimos del modo edicion y recargamos.
+    salirModoEdicionReventa();
+    await Promise.all([cargarReventas(), cargarStockRevendedora()]);
+    renderizarTodo();
+    renderizarFormularioReventa();
+    mostrarAlerta(`Reventa ${id} actualizada.`, "ok");
 }
 
 // ----------------------------------------------------------------------------

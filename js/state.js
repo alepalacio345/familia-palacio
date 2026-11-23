@@ -47,6 +47,13 @@ export const state = {
     //        tasa, fecha, usuario }]
     caja: [],
 
+    // --- PAPELERA: productos eliminados del inventario (recuperables) ---
+    //     [{ id, product_id, name, cantidad, precio, fecha_eliminado, usuario }]
+    papelera: [],
+
+    // --- Id de la reventa que la revendedora esta EDITANDO (o null) ---
+    reventaEditandoId: null,
+
     // --- Producto que se esta editando actualmente (id o null) ---
     idEditando: null,
 

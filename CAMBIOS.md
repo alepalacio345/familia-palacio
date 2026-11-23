@@ -96,6 +96,18 @@ El panel de inventario ahora tiene:
   **unidades en total**, y el **valor total** del inventario (en la moneda
   activa y en USD).
 
+### Papelera (recuperar productos borrados) 🗑️
+
+Cuando "eliminas" un producto, ya **no se borra para siempre**: se mueve a una
+**papelera**. Desde el panel **"Papelera"** puedes:
+
+- **Restaurar** el producto (vuelve al inventario con su cantidad y precio).
+- **Eliminar definitivamente** (esto sí lo borra para siempre).
+
+> ⚠️ Esto protege las eliminaciones **futuras**. Si borraste un producto antes
+> de crear la papelera, Supabase no guarda historial de filas borradas y no se
+> puede recuperar por aquí (solo con backups de Supabase si los tienes activos).
+
 ### Tipo de operación al procesar una entrega
 
 Al procesar una venta, el admin ahora elige **Tipo de operación**:
@@ -118,6 +130,9 @@ La revendedora ve un panel donde:
   - **cómo pagará** (divisa o bolívares).
 - Registra **nombre de a quién le vendió** y **cédula (opcional)**.
 - Genera un **recibo PDF de reventa**.
+- Puede **editar** sus propias reventas (botón "Editar") y **eliminarlas**;
+  en ambos casos el stock se ajusta automáticamente. No puede tocar las
+  reventas de otros ni las entregas del admin.
 
 ### Filtros para el admin (Reventas)
 
@@ -172,7 +187,7 @@ tasa actual). Los motivos predeterminados se pueden editar en `js/caja.js`.
 2. **Ejecuta el script SQL** `sql/schema.sql` una sola vez en Supabase:
    - Dashboard de Supabase → **SQL Editor** → pega el contenido → **Run**.
    - Esto crea el usuario `master02`, las tablas `reventas`,
-     `stock_revendedora`, `sesiones`, `caja` y agrega los campos nuevos.
+     `stock_revendedora`, `sesiones`, `caja`, `papelera` y agrega los campos nuevos.
 3. Recarga la página e inicia sesión.
 
 > ⚠️ Si no ejecutas `schema.sql`, el login fallará con un error porque las
@@ -192,7 +207,7 @@ tasa actual). Los motivos predeterminados se pueden editar en `js/caja.js`.
 | `js/auth.js`          | Login por rol                                                   |
 | `js/sesion.js`        | Roles, permisos, sidebar y log de sesiones                      |
 | `js/ui.js`            | Renderizado de tablas/totales con moneda                        |
-| `js/inventario.js`    | Gestión de productos (admin)                                    |
+| `js/inventario.js`    | Gestión de productos + papelera (admin)                        |
 | `js/entregas.js`      | Ventas/entregas del admin + tipo de operación                   |
 | `js/stock.js`         | Stock de la revendedora (leer/sumar/restar)                     |
 | `js/reventas.js`      | Módulo de la revendedora + filtros                              |
@@ -218,9 +233,9 @@ Todos los archivos y funciones están **comentados en español**.
    comisión que te debe.
 4. **Reporte de pagos pendientes:** una lista de todas las reventas pendientes
    con fecha próxima a vencer, para cobrar a tiempo.
-5. **Cambiar una reventa:** hoy la revendedora puede **eliminar** sus propias
-   reventas (y se devuelve el stock), pero no editarlas. Podrías agregar un
-   botón "Editar" si prefieres que corrija en lugar de borrar y rehacer.
+5. **Papelera para entregas y reventas:** hoy la papelera solo cubre el
+   inventario. Podrías aplicarla también a entregas y reventas para poder
+   recuperarlas si se borran por error.
 6. **Alertas de stock bajo:** avisar cuando un producto (o el stock de la
    revendedora) está por debajo de un mínimo.
 7. **Registro de caja / cierre diario:** total vendido en Bs y en divisa por

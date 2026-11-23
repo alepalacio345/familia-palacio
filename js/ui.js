@@ -78,6 +78,7 @@ export function renderizarTodo() {
     renderizarReventas();
     renderizarSesiones();
     renderizarCaja();
+    renderizarPapelera();
     renderizarTasas();
 }
 
@@ -193,6 +194,36 @@ export function renderizarInventarioSoloLectura() {
             <td>${escaparHtml(p.name)}</td>
             <td>${Number(p.cantidad).toFixed(2)}</td>
             <td>${escaparHtml(formatearMoneda(p.precio))}</td>
+        </tr>
+    `).join("");
+}
+
+// ----------------------------------------------------------------------------
+// PAPELERA (productos eliminados, recuperables) — solo la ve el admin.
+// Cada fila tiene "Restaurar" y "Eliminar definitivo".
+// ----------------------------------------------------------------------------
+export function renderizarPapelera() {
+    const tbody = document.getElementById("tbody-papelera");
+    if (!tbody) return;
+
+    if (state.papelera.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6">La papelera esta vacia.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = state.papelera.map(p => `
+        <tr>
+            <td><strong>${escaparHtml(p.product_id)}</strong></td>
+            <td>${escaparHtml(p.name)}</td>
+            <td>${Number(p.cantidad).toFixed(2)}</td>
+            <td>${escaparHtml(formatearMonto(p.precio, "USD"))}</td>
+            <td>${escaparHtml(p.fecha_eliminado || "-")}</td>
+            <td>
+                <div class="acciones-celda">
+                    <button class="btn btn-success btn-sm" data-action="restaurar" data-id="${escaparHtml(p.id)}">Restaurar</button>
+                    <button class="btn btn-danger btn-sm" data-action="borrar-def" data-id="${escaparHtml(p.id)}">Eliminar definitivo</button>
+                </div>
+            </td>
         </tr>
     `).join("");
 }
@@ -354,12 +385,16 @@ export function renderizarReventas() {
         // El monto se muestra en la moneda en la que se cobro.
         const montoTexto = formatearMonto(r.monto, r.moneda || "USD");
 
-        // Acciones: PDF siempre; Eliminar segun permiso (admin cualquiera,
-        // revendedora solo la suya).
-        const puedeEliminar = esAdmin() || r.usuario === state.usuarioActual?.usuario;
+        // Acciones: PDF siempre; "Editar" solo la revendedora para las SUYAS;
+        // "Eliminar" el admin (cualquiera) o la revendedora (solo las suyas).
+        const esAdminLocal = esAdmin();
+        const esPropia = r.usuario === state.usuarioActual?.usuario;
+        const puedeEditar = !esAdminLocal && esPropia;
+        const puedeEliminar = esAdminLocal || esPropia;
         const acciones = `
             <div class="acciones-celda">
                 <button class="btn btn-primary btn-sm" data-action="pdf-rev" data-id="${escaparHtml(r.id)}">PDF</button>
+                ${puedeEditar ? `<button class="btn btn-warning btn-sm" data-action="edit-rev" data-id="${escaparHtml(r.id)}">Editar</button>` : ""}
                 ${puedeEliminar ? `<button class="btn btn-danger btn-sm" data-action="del-rev" data-id="${escaparHtml(r.id)}">Eliminar</button>` : ""}
             </div>`;
 

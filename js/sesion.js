@@ -40,6 +40,7 @@ export function esRevendedora() {
 // ----------------------------------------------------------------------------
 const ITEMS_MENU = [
     { panel: "panel-inventario",   texto: "Inventario",          icono: "📦", roles: ["admin"] },
+    { panel: "panel-papelera",     texto: "Papelera",            icono: "🗑️", roles: ["admin"] },
     { panel: "panel-venta",        texto: "Venta / Entrega",     icono: "🧾", roles: ["admin"] },
     { panel: "panel-entregas",     texto: "Historial de Entregas", icono: "📋", roles: ["admin"] },
     { panel: "panel-reventas",     texto: "Reventas",            icono: "💸", roles: ["admin", "revendedora"] },
