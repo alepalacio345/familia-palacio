@@ -167,3 +167,19 @@ CREATE TABLE IF NOT EXISTS papelera (
     usuario         text,                -- Quien lo elimino
     creado_en       timestamptz DEFAULT now()
 );
+
+
+-- ============================================================================
+-- 8) DESACTIVAR RLS en las tablas NUEVAS
+--    La aplicacion usa la llave ANONIMA de Supabase (no hace login real en la
+--    base de datos), por eso NO usamos politicas de seguridad por fila.
+--    Si una tabla nueva queda con RLS activado, los INSERT/UPDATE dan el error:
+--        "new row violates row-level security policy for table ..."
+--    Con esto desactivamos RLS en todas las tablas nuevas para que funcionen
+--    igual que las tablas originales (inventario, entregas, usuarios).
+-- ============================================================================
+ALTER TABLE IF EXISTS papelera DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS reventas DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS stock_revendedora DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS sesiones DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS caja DISABLE ROW LEVEL SECURITY;

@@ -20,7 +20,7 @@ import { cargarInventario } from "./inventario.js";
 import { generarReciboPDF } from "./pdf.js";
 import { sumarStock, restarStock } from "./stock.js";
 import { convertirDesdeUsd, obtenerTasa } from "./tasas.js";
-import { mostrarAlerta, renderizarListaVenta, renderizarSelectProductos, renderizarTodo } from "./ui.js";
+import { mostrarAlerta, renderizarListaVenta, renderizarSelectProductos, renderizarTodo, mostrarModal } from "./ui.js";
 
 // ----------------------------------------------------------------------------
 // cargarEntregas()
@@ -111,11 +111,68 @@ function parsearItemsDesdeDetalle(detalle) {
 
 // ----------------------------------------------------------------------------
 // eliminarEntrega(idEntrega)
-// Borra una entrega. Si era de tipo "revendedora", devuelve el stock al
-// inventario de la revendedora (sin bajar de cero).
+// Al borrar una entrega, PREGUNTA que paso con la mercancia:
+//   * "Devolver al almacen" -> suma las cantidades de vuelta al inventario.
+//   * "Error de registro"  -> solo borra el registro, sin tocar stock.
+// La decision la toma el admin con un modal de confirmacion.
 // ----------------------------------------------------------------------------
-async function eliminarEntrega(idEntrega) {
+function eliminarEntrega(idEntrega) {
     const entrega = state.entregas.find(e => e.id === idEntrega);
+    if (!entrega) return;
+
+    mostrarModal({
+        titulo: `Eliminar entrega ${idEntrega}`,
+        texto: "¿Qué pasó con esta venta?\n\nElige qué hacer con las existencias.",
+        botones: [
+            {
+                texto: "Devolver al almacén",
+                clase: "btn-success",
+                onClick: () => confirmarEliminarEntrega(idEntrega, true),
+            },
+            {
+                texto: "Fue un error de registro",
+                clase: "btn-secondary",
+                onClick: () => confirmarEliminarEntrega(idEntrega, false),
+            },
+            {
+                texto: "Cancelar",
+                clase: "btn-outline",
+                onClick: () => {},
+            },
+        ],
+    });
+}
+
+// ----------------------------------------------------------------------------
+// confirmarEliminarEntrega(idEntrega, devolver)
+// Ejecuta el borrado real de la entrega.
+//   - devolver=true  -> devuelve las existencias al inventario principal.
+//   - devolver=false -> solo borra el registro (la mercancia ya salio).
+// Si la entrega era de tipo "revendedora" y se devuelve, tambien se quita
+// de su stock.
+// ----------------------------------------------------------------------------
+async function confirmarEliminarEntrega(idEntrega, devolver) {
+    const entrega = state.entregas.find(e => e.id === idEntrega);
+    if (!entrega) return;
+
+    const items = parsearItemsDesdeDetalle(entrega.detalle);
+    const tipo = entrega.tipo || "entrega";
+
+    if (devolver) {
+        // 1. Devolver las cantidades al inventario principal.
+        for (const item of items) {
+            await devolverAlInventario(item.id, item.cantidad);
+        }
+        // 2. Si era entrega a la revendedora, quitar de su stock.
+        if (tipo === "revendedora") {
+            for (const item of items) {
+                await restarStock(item.id, item.cantidad);
+            }
+        }
+    }
+    // Si devolver=false, no tocamos ningun stock (solo se corrige el registro).
+
+    // 3. Borrar el registro de la entrega.
     const { error } = await db
         .from("entregas")
         .delete()
@@ -126,16 +183,32 @@ async function eliminarEntrega(idEntrega) {
         return;
     }
 
-    // Si era una entrega a la revendedora, devolvemos su stock.
-    if (entrega && entrega.tipo === "revendedora") {
-        for (const item of parsearItemsDesdeDetalle(entrega.detalle)) {
-            await restarStock(item.id, item.cantidad);
-        }
-    }
-
-    await cargarEntregas();
+    await Promise.all([cargarEntregas(), cargarInventario()]);
     renderizarTodo();
-    mostrarAlerta(`Entrega ${idEntrega} eliminada de la nube.`, "ok");
+
+    if (devolver) {
+        mostrarAlerta(`Entrega ${idEntrega} eliminada y existencias devueltas al almacén.`, "ok");
+    } else {
+        mostrarAlerta(`Entrega ${idEntrega} eliminada (solo se corrigió el registro).`, "ok");
+    }
+}
+
+// ----------------------------------------------------------------------------
+// devolverAlInventario(id, cantidad)
+// Suma una cantidad de vuelta al inventario principal de un producto.
+// ----------------------------------------------------------------------------
+async function devolverAlInventario(id, cantidad) {
+    const prod = state.inventario.find(p => p.id === id);
+    const nueva = Number(((prod ? prod.cantidad : 0) + cantidad).toFixed(2));
+
+    const { error } = await db
+        .from("inventario")
+        .update({ cantidad: nueva })
+        .eq("id", id);
+
+    if (error) {
+        console.warn(`No se pudo devolver ${id} al inventario:`, error.message);
+    }
 }
 
 // ----------------------------------------------------------------------------

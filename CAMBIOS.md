@@ -118,6 +118,15 @@ Al procesar una venta, el admin ahora elige **Tipo de operación**:
 3. **Revendedora (para reventa)** → descuenta del inventario principal **y
    además SUMA** esas cantidades al **stock de la revendedora**.
 
+### Borrar una venta (entrega)
+
+Al **eliminar una entrega**, el sistema te pregunta **qué pasó con la mercancía**:
+
+- **"Devolver al almacén"** → suma las cantidades de vuelta al inventario.
+- **"Fue un error de registro"** → solo borra el registro, sin tocar el stock.
+
+Así tú decides si la mercancía volvió o si solo te equivocaste al anotar.
+
 ### Módulo de la revendedora
 
 La revendedora ve un panel donde:
@@ -192,6 +201,12 @@ tasa actual). Los motivos predeterminados se pueden editar en `js/caja.js`.
 
 > ⚠️ Si no ejecutas `schema.sql`, el login fallará con un error porque las
 > tablas/columnas nuevas no existen todavía.
+>
+> 🔒 **Error de RLS:** si al guardar te sale
+> `"new row violates row-level security policy for table ..."`, es porque la
+> tabla quedó con *Row Level Security* activado. El script ya incluye una
+> sección (8) que **desactiva RLS** en las tablas nuevas. Vuelve a ejecutarlo
+> y listo.
 
 ---
 

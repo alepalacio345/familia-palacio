@@ -134,7 +134,8 @@ export function aplicarPermisosPorRol() {
 // ----------------------------------------------------------------------------
 //  registrarEntradaSesion()
 //  Crea una fila en `sesiones` con la hora de ENTRADA del usuario.
-//  Guarda el id de esa fila en state.sesionId para poder marcar la salida.
+//  Ya no leemos de vuelta el id (eso fallaba si la tabla tenia RLS); para la
+//  salida simplemente cerramos la sesion abierta de ese usuario.
 // ----------------------------------------------------------------------------
 export async function registrarEntradaSesion() {
     if (!state.usuarioActual || !db) return;
@@ -142,46 +143,42 @@ export async function registrarEntradaSesion() {
     const ahora = new Date();
     const fecha = `${ahora.toLocaleDateString("es-VE")} ${ahora.toLocaleTimeString("es-VE")}`;
 
-    const { data, error } = await db
-        .from("sesiones")
-        .insert([{
-            usuario: state.usuarioActual.usuario,
-            rol: state.usuarioActual.rol,
-            fecha_entrada: fecha,
-            fecha_salida: null,
-            notas: "",
-        }])
-        .select("id")
-        .single();
+    const { error } = await db.from("sesiones").insert([{
+        usuario: state.usuarioActual.usuario,
+        rol: state.usuarioActual.rol,
+        fecha_entrada: fecha,
+        fecha_salida: null,
+        notas: "",
+    }]);
 
     if (error) {
+        // Avisamos en pantalla: si la tabla tiene RLS activado, aqui se nota.
+        mostrarAlerta(`No se pudo registrar tu entrada (${error.message}). Revisa RLS de la tabla 'sesiones'.`, "err");
         console.warn("No se pudo registrar la entrada de sesion:", error.message);
-        return;
     }
-
-    state.sesionId = data ? data.id : null;
 }
 
 // ----------------------------------------------------------------------------
 //  registrarSalidaSesion()
-//  Marca la hora de SALIDA en la fila de sesion activa (state.sesionId).
+//  Marca la hora de SALIDA en la sesion abierta del usuario actual
+//  (todas las filas de este usuario con fecha_salida = null).
 // ----------------------------------------------------------------------------
 export async function registrarSalidaSesion() {
-    if (!state.sesionId || !db) return;
+    if (!state.usuarioActual || !db) return;
 
+    const usuario = state.usuarioActual.usuario;
     const ahora = new Date();
     const fecha = `${ahora.toLocaleDateString("es-VE")} ${ahora.toLocaleTimeString("es-VE")}`;
 
     const { error } = await db
         .from("sesiones")
         .update({ fecha_salida: fecha })
-        .eq("id", state.sesionId);
+        .eq("usuario", usuario)
+        .is("fecha_salida", null);
 
     if (error) {
         console.warn("No se pudo registrar la salida de sesion:", error.message);
     }
-
-    state.sesionId = null;
 }
 
 // ----------------------------------------------------------------------------
@@ -211,6 +208,11 @@ export async function cargarSesiones() {
         .order("id", { ascending: false });
 
     if (error) {
+        // Si el admin no puede leer la tabla, avisamos en pantalla
+        // (suele ser por RLS activado en 'sesiones').
+        if (state.usuarioActual && state.usuarioActual.rol !== "revendedora") {
+            mostrarAlerta(`No se pudo cargar el registro de sesiones: ${error.message}`, "err");
+        }
         console.warn("Error cargando sesiones:", error.message);
         return false;
     }

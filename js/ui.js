@@ -64,6 +64,45 @@ export function mostrarAlerta(mensaje, tipo) {
 }
 
 // ----------------------------------------------------------------------------
+// MODAL DE CONFIRMACION (generico)
+// mostrarModal({ titulo, texto, botones })
+//   botones = [{ texto, clase, onClick }]
+// Se usa para preguntar al usuario antes de hacer algo importante
+// (ej. al borrar una venta: ¿devolver stock o solo error de registro?).
+// ----------------------------------------------------------------------------
+export function mostrarModal({ titulo = "", texto = "", botones = [] }) {
+    const overlay = document.getElementById("modal-overlay");
+    if (!overlay) return;
+
+    document.getElementById("modal-titulo").textContent = titulo;
+    document.getElementById("modal-texto").textContent = texto;
+
+    const contenedor = document.getElementById("modal-botones");
+    contenedor.innerHTML = "";
+
+    botones.forEach(opcion => {
+        const btn = document.createElement("button");
+        btn.className = `btn ${opcion.clase || "btn-primary"}`;
+        btn.textContent = opcion.texto;
+        btn.addEventListener("click", () => {
+            cerrarModal();
+            if (opcion.onClick) opcion.onClick();
+        });
+        contenedor.appendChild(btn);
+    });
+
+    overlay.classList.remove("hidden");
+}
+
+// ----------------------------------------------------------------------------
+// cerrarModal()
+// Oculta el modal de confirmacion.
+// ----------------------------------------------------------------------------
+export function cerrarModal() {
+    document.getElementById("modal-overlay")?.classList.add("hidden");
+}
+
+// ----------------------------------------------------------------------------
 // renderizarTodo()
 // Pinta TODAS las secciones. Se llama despues de cargar datos o al cambiar
 // la moneda activa.

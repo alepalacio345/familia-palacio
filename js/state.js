@@ -62,10 +62,6 @@ export const state = {
     //     rol: 'admin' | 'revendedora'
     usuarioActual: null,
 
-    // --- Id de la fila en `sesiones` de la sesion activa ---
-    //     Se usa para marcar la hora de salida al cerrar sesion.
-    sesionId: null,
-
     // --- Moneda activa para MOSTRAR precios en toda la app ---
     //     Puede ser: USD, VES, EUR, INR, CNY
     moneda: "USD",
