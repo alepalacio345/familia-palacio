@@ -127,6 +127,10 @@ Al **eliminar una entrega**, el sistema te pregunta **qué pasó con la mercanc�
 
 Así tú decides si la mercancía volvió o si solo te equivocaste al anotar.
 
+> **Entrega a la revendedora:** al borrarla se **cancela completa** (no hay
+> ambigüedad): se quita de su stock y las existencias vuelven al almacén. Si su
+> stock de un producto llega a cero, la fila desaparece de "Disponibilidad".
+
 ### Módulo de la revendedora
 
 La revendedora ve un panel donde:

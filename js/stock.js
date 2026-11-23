@@ -8,6 +8,7 @@
 
 import { db } from "./config.js";
 import { state } from "./state.js";
+import { mostrarAlerta } from "./ui.js";
 
 // ----------------------------------------------------------------------------
 // cargarStockRevendedora()
@@ -50,6 +51,7 @@ export async function sumarStock(product_id, name, cantidad) {
         .upsert({ product_id, name: nombreFinal, cantidad: nueva }, { onConflict: "product_id" });
 
     if (error) {
+        mostrarAlerta(`Error sumando stock de ${product_id}: ${error.message}`, "err");
         console.warn(`Error sumando stock de ${product_id}:`, error.message);
         return false;
     }
@@ -60,7 +62,9 @@ export async function sumarStock(product_id, name, cantidad) {
 
 // ----------------------------------------------------------------------------
 // restarStock(product_id, cantidad)
-// Descuenta `cantidad` del stock de la revendedora (sin bajar de cero).
+// Descuenta `cantidad` del stock de la revendedora.
+// Si la cantidad llega a CERO, se BORRA la fila para que el producto
+// desaparezca de la lista de "Disponibilidad".
 // Se usa cuando la revendedora registra una reventa o cuando se deshace algo.
 // ----------------------------------------------------------------------------
 export async function restarStock(product_id, cantidad) {
@@ -68,12 +72,23 @@ export async function restarStock(product_id, cantidad) {
     const actual = existente ? existente.cantidad : 0;
     const nueva = Math.max(0, Number((actual - cantidad).toFixed(2)));
 
-    const { error } = await db
-        .from("stock_revendedora")
-        .upsert({ product_id, name: existente ? existente.name : product_id, cantidad: nueva }, { onConflict: "product_id" });
+    let resultado;
+    if (nueva <= 0) {
+        // Ya no queda nada: eliminamos la fila del stock.
+        resultado = await db
+            .from("stock_revendedora")
+            .delete()
+            .eq("product_id", product_id);
+    } else {
+        // Todavia queda algo: actualizamos la cantidad.
+        resultado = await db
+            .from("stock_revendedora")
+            .upsert({ product_id, name: existente ? existente.name : product_id, cantidad: nueva }, { onConflict: "product_id" });
+    }
 
-    if (error) {
-        console.warn(`Error restando stock de ${product_id}:`, error.message);
+    if (resultado.error) {
+        mostrarAlerta(`Error quitando stock de ${product_id}: ${resultado.error.message}`, "err");
+        console.warn(`Error restando stock de ${product_id}:`, resultado.error.message);
         return false;
     }
 
