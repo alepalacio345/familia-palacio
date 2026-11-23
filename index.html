@@ -3,18 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Inventario y Entregas (Nube)</title>
+    <title>Sistema de Inventario, Entregas y Reventas</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Supabase (base de datos en la nube) y jsPDF (generador de recibos) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
-    <!-- PANTALLA DE LOGIN -->
+    <!-- ==================================================================== -->
+    <!-- PANTALLA DE LOGIN                                                   -->
+    <!-- ==================================================================== -->
     <section id="login-screen" class="centered-container">
         <div class="card login-card">
             <h1>Acceso al Sistema</h1>
-            <p class="subtitle">Conectado a la nube (Supabase)</p>
+            <p class="subtitle">Inventario · Entregas · Reventas (Supabase)</p>
             <div class="file-bar">
                 <span id="status-nube-login" class="status-badge">Verificando conexion...</span>
             </div>
@@ -22,7 +25,7 @@
             <form id="login-form">
                 <div class="form-group">
                     <label for="login-usuario">Usuario</label>
-                    <input type="text" id="login-usuario" placeholder="Ej. admin (o escribe 'salir')" required>
+                    <input type="text" id="login-usuario" placeholder="Ej. admin o master02" required>
                 </div>
                 <div class="form-group">
                     <label for="login-clave">Clave</label>
@@ -37,72 +40,133 @@
         </div>
     </section>
 
-    <!-- PANTALLA DE SALIDA -->
+    <!-- ==================================================================== -->
+    <!-- PANTALLA DE SALIDA                                                  -->
+    <!-- ==================================================================== -->
     <section id="exit-screen" class="centered-container hidden">
         <div class="card login-card">
             <h2>Sesion finalizada</h2>
-            <p class="subtitle">Has salido del sistema de inventario.</p>
+            <p class="subtitle">Has salido del sistema.</p>
             <button type="button" id="btn-volver-login" class="btn btn-primary btn-full">Volver al acceso</button>
         </div>
     </section>
 
-    <!-- APLICACION PRINCIPAL -->
+    <!-- ==================================================================== -->
+    <!-- APLICACION PRINCIPAL                                                -->
+    <!-- ==================================================================== -->
     <div id="app-screen" class="hidden">
+
+        <!-- Barra superior -->
         <header class="topbar">
-            <div>
-                <h2>Control de Inventario y Entregas</h2>
-                <span class="status-badge connected">Sincronizado con Supabase</span>
+            <div class="topbar-izq">
+                <button id="btn-menu" class="btn-menu" title="Abrir menu">☰</button>
+                <div>
+                    <h2>Control de Inventario y Entregas</h2>
+                    <span class="status-badge connected">Sincronizado con Supabase</span>
+                </div>
             </div>
-            <div class="topbar-actions">
+            <div class="topbar-right">
+                <div class="moneda-control">
+                    <label for="select-moneda">Moneda:</label>
+                    <select id="select-moneda"></select>
+                    <span id="tasa-info" class="status-badge" title="Tasa de cambio actual"></span>
+                </div>
                 <button id="btn-sincronizar" class="btn btn-secondary">Actualizar datos</button>
                 <button id="btn-cerrar-sesion" class="btn btn-danger">Salir</button>
             </div>
         </header>
 
-        <main class="container">
-            <div id="alerta-global" class="alerta hidden"></div>
+        <div class="app-layout">
 
-            <div class="grid-2">
-                <!-- REGISTRAR / EDITAR PRODUCTO -->
-                <section id="card-producto" class="card">
-                    <h3 id="titulo-form-producto">Registrar Producto</h3>
-                    <form id="form-producto">
-                        <div class="form-group">
-                            <label for="prod-id">ID del Producto</label>
-                            <input type="text" id="prod-id" placeholder="Ej. P#01" required>
+            <!-- ================= MENU LATERAL (SIDEBAR) ================= -->
+            <aside id="sidebar" class="sidebar">
+                <div class="sidebar-header">
+                    <h3>Módulos</h3>
+                    <span id="sidebar-usuario" class="status-badge"></span>
+                </div>
+                <nav id="sidebar-nav"></nav>
+            </aside>
+            <div id="overlay-sidebar"></div>
+
+            <!-- ================= CONTENIDO PRINCIPAL ==================== -->
+            <main class="container" id="main-content">
+                <div id="alerta-global" class="alerta hidden"></div>
+
+                <!-- ---------- PANEL: INVENTARIO (admin) ---------- -->
+                <section id="panel-inventario" class="card panel hidden">
+                    <div class="card-header">
+                        <h3>Inventario en la Nube</h3>
+                        <div class="action-group">
+                            <input type="file" id="input-importar-inv" accept=".txt" class="hidden">
+                            <button id="btn-importar-inv" class="btn btn-outline">Subir .txt</button>
+                            <button id="btn-exportar-inv" class="btn btn-primary">Exportar .txt</button>
                         </div>
-                        <div class="form-group">
-                            <label for="prod-nombre">Nombre (sin espacios)</label>
-                            <input type="text" id="prod-nombre" placeholder="Ej. harina" required>
-                        </div>
-                        <div class="form-row-2">
+                    </div>
+
+                    <!-- Formulario registrar/editar producto (solo admin) -->
+                    <div id="card-producto" class="card card-inner">
+                        <h3 id="titulo-form-producto">Registrar Producto</h3>
+                        <form id="form-producto">
                             <div class="form-group">
-                                <label for="prod-cantidad">Cantidad</label>
-                                <input type="number" id="prod-cantidad" step="0.01" min="0" placeholder="Ej. 15" required>
+                                <label for="prod-id">ID del Producto</label>
+                                <input type="text" id="prod-id" placeholder="Ej. P#01" required>
                             </div>
                             <div class="form-group">
-                                <label for="prod-precio">Precio Unitario ($)</label>
-                                <input type="number" id="prod-precio" step="0.01" min="0" placeholder="Ej. 2.50" required>
+                                <label for="prod-nombre">Nombre (sin espacios)</label>
+                                <input type="text" id="prod-nombre" placeholder="Ej. harina" required>
                             </div>
-                        </div>
-                        <div class="btn-row">
-                            <button type="submit" id="btn-guardar-producto" class="btn btn-primary">Guardar en la Nube</button>
-                            <button type="button" id="btn-cancelar-edicion" class="btn btn-outline hidden">Cancelar</button>
-                        </div>
-                    </form>
+                            <div class="form-row-2">
+                                <div class="form-group">
+                                    <label for="prod-cantidad">Cantidad</label>
+                                    <input type="number" id="prod-cantidad" step="0.01" min="0" placeholder="Ej. 15" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="prod-precio">Precio Unitario (USD base)</label>
+                                    <input type="number" id="prod-precio" step="0.01" min="0" placeholder="Ej. 130.00" required>
+                                </div>
+                            </div>
+                            <div class="btn-row">
+                                <button type="submit" id="btn-guardar-producto" class="btn btn-primary">Guardar en la Nube</button>
+                                <button type="button" id="btn-cancelar-edicion" class="btn btn-outline hidden">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Busqueda + resumen de totales del inventario -->
+                    <div class="inventario-tools">
+                        <input type="text" id="buscar-inventario" placeholder="🔍 Buscar producto por nombre o ID...">
+                    </div>
+                    <div id="resumen-inventario" class="resumen-inventario"></div>
+
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre</th>
+                                    <th>Cantidad</th>
+                                    <th>Precio Unit.</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-inventario"></tbody>
+                        </table>
+                    </div>
                 </section>
 
-                <!-- LISTA DE VENTA Y DATOS DEL RECIBO -->
-                <section class="card">
+                <!-- ---------- PANEL: VENTA / ENTREGA (admin) ---------- -->
+                <section id="panel-venta" class="card panel hidden">
                     <h3>Lista de Venta / Entrega</h3>
                     <form id="form-lista">
-                        <div class="form-group">
-                            <label for="lista-producto">Producto</label>
-                            <select id="lista-producto" required></select>
-                        </div>
-                        <div class="form-group">
-                            <label for="lista-cantidad">Cantidad a llevar</label>
-                            <input type="number" id="lista-cantidad" min="0.01" step="0.01" placeholder="Ej. 2" required>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="lista-producto">Producto</label>
+                                <select id="lista-producto" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="lista-cantidad">Cantidad a llevar</label>
+                                <input type="number" id="lista-cantidad" min="0.01" step="0.01" placeholder="Ej. 2" required>
+                            </div>
                         </div>
                         <button type="submit" class="btn btn-secondary btn-full">Agregar a la Lista</button>
                     </form>
@@ -128,7 +192,17 @@
                         <strong id="total-lista">$0.00</strong>
                     </div>
 
-                    <div class="form-row-2 small-gap">
+                    <div class="form-group small-gap">
+                        <label for="entrega-tipo">Tipo de operacion</label>
+                        <select id="entrega-tipo">
+                            <option value="entrega">Entrega (cliente final)</option>
+                            <option value="otra">Otra persona (no revende)</option>
+                            <option value="revendedora">Revendedora (para reventa)</option>
+                        </select>
+                        <span class="hint">Si eliges "Revendedora", las cantidades se suman al stock de la revendedora para que ella las revenda.</span>
+                    </div>
+
+                    <div class="form-row-2">
                         <div class="form-group">
                             <label for="cliente-nombre">Nombre del Cliente</label>
                             <input type="text" id="cliente-nombre" placeholder="Ej. Maria Gomez">
@@ -148,62 +222,317 @@
                         Procesar Entrega y Generar Recibo PDF
                     </button>
                 </section>
-            </div>
 
-            <!-- INVENTARIO -->
-            <section class="card">
-                <div class="card-header">
-                    <h3>Inventario en la Nube</h3>
-                    <div class="action-group">
-                        <input type="file" id="input-importar-inv" accept=".txt" class="hidden">
-                        <button id="btn-importar-inv" class="btn btn-outline">Subir .txt a la nube</button>
-                        <button id="btn-exportar-inv" class="btn btn-primary">Exportar .txt</button>
+                <!-- ---------- PANEL: HISTORIAL DE ENTREGAS (admin) ---------- -->
+                <section id="panel-entregas" class="card panel hidden">
+                    <div class="card-header">
+                        <h3>Historial de Entregas</h3>
+                        <div class="action-group">
+                            <input type="file" id="input-importar-ent" accept=".txt" class="hidden">
+                            <button id="btn-importar-ent" class="btn btn-outline">Subir .txt</button>
+                            <button id="btn-exportar-ent" class="btn btn-primary">Exportar .txt</button>
+                        </div>
                     </div>
-                </div>
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Nombre</th>
-                                <th>Cantidad Disponible</th>
-                                <th>Precio Unit.</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-inventario"></tbody>
-                    </table>
-                </div>
-            </section>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Fecha</th>
+                                    <th>Cliente / Cedula</th>
+                                    <th>Lugar</th>
+                                    <th>Productos</th>
+                                    <th>Tipo</th>
+                                    <th>Total</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-entregas"></tbody>
+                        </table>
+                    </div>
+                </section>
 
-            <!-- HISTORIAL DE ENTREGAS -->
-            <section class="card">
-                <div class="card-header">
-                    <h3>Historial de Entregas en la Nube</h3>
-                    <div class="action-group">
-                        <input type="file" id="input-importar-ent" accept=".txt" class="hidden">
-                        <button id="btn-importar-ent" class="btn btn-outline">Subir .txt a la nube</button>
-                        <button id="btn-exportar-ent" class="btn btn-primary">Exportar .txt</button>
+                <!-- ---------- PANEL: REVENTAS (revendedora y admin) ---------- -->
+                <section id="panel-reventas" class="card panel hidden">
+
+                    <!-- Formulario para registrar una reventa (SOLO revendedora) -->
+                    <div id="reventa-form-wrap">
+                        <h3>Registrar Reventa</h3>
+
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="rev-producto">Producto (stock disponible)</label>
+                                <select id="rev-producto"></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="rev-cantidad">Cantidad</label>
+                                <input type="number" id="rev-cantidad" min="0.01" step="0.01" placeholder="Ej. 1">
+                            </div>
+                        </div>
+                        <button id="btn-agregar-reventa" class="btn btn-secondary btn-full">Agregar al carrito</button>
+
+                        <div class="table-wrapper small-gap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Producto</th>
+                                        <th>Cant.</th>
+                                        <th>P. Unit.</th>
+                                        <th>Accion</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-reventa-cart"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="total-banner">
+                            <span>Total de la reventa:</span>
+                            <strong id="total-reventa">$0.00</strong>
+                        </div>
+
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="rev-cliente">Nombre de a quien le vendiste</label>
+                                <input type="text" id="rev-cliente" placeholder="Ej. Pedro Perez">
+                            </div>
+                            <div class="form-group">
+                                <label for="rev-cedula">Cedula (opcional)</label>
+                                <input type="text" id="rev-cedula" placeholder="Ej. V-12345678">
+                            </div>
+                        </div>
+
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="rev-tipo-pago">¿Como fue el pago?</label>
+                                <select id="rev-tipo-pago">
+                                    <option value="divisa">Divisa</option>
+                                    <option value="bolivares">Bolivares</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="rev-moneda">Moneda</label>
+                                <select id="rev-moneda">
+                                    <option value="USD">Dolar ($)</option>
+                                    <option value="VES">Bolivares (Bs)</option>
+                                    <option value="EUR">Euro (€)</option>
+                                    <option value="INR">Rupia (₹)</option>
+                                    <option value="CNY">Yuan (¥)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="rev-pendiente"> El pago queda pendiente
+                            </label>
+                        </div>
+
+                        <!-- Bloque visible solo si el pago esta pendiente -->
+                        <div id="rev-pago-block" class="hidden">
+                            <div class="form-row-2">
+                                <div class="form-group">
+                                    <label for="rev-fecha-pago">Posible fecha del pago</label>
+                                    <input type="date" id="rev-fecha-pago">
+                                </div>
+                                <div class="form-group">
+                                    <label for="rev-como-pagara">¿Como pagara?</label>
+                                    <select id="rev-como-pagara">
+                                        <option value="divisa">Divisa</option>
+                                        <option value="bolivares">Bolivares</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button id="btn-registrar-reventa" class="btn btn-success btn-full">
+                            Registrar Reventa y Generar Recibo PDF
+                        </button>
                     </div>
-                </div>
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID Entrega</th>
-                                <th>Fecha</th>
-                                <th>Cliente / Cedula</th>
-                                <th>Lugar de Entrega</th>
-                                <th>Productos</th>
-                                <th>Total</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-entregas"></tbody>
-                    </table>
-                </div>
-            </section>
-        </main>
+
+                    <!-- Filtros del historial de reventas (SOLO admin) -->
+                    <div id="reventa-filtros-wrap" class="filtros-box hidden">
+                        <h3>Filtrar Reventas</h3>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="filtro-rev-usuario">Revendedora</label>
+                                <select id="filtro-rev-usuario"></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="filtro-rev-desde">Desde</label>
+                                <input type="date" id="filtro-rev-desde">
+                            </div>
+                            <div class="form-group">
+                                <label for="filtro-rev-hasta">Hasta</label>
+                                <input type="date" id="filtro-rev-hasta">
+                            </div>
+                            <div class="form-group">
+                                <label for="filtro-rev-cliente">Nombre del comprador</label>
+                                <input type="text" id="filtro-rev-cliente" placeholder="Buscar por nombre...">
+                            </div>
+                            <div class="form-group">
+                                <label for="filtro-rev-monto-min">Monto minimo (USD)</label>
+                                <input type="number" id="filtro-rev-monto-min" step="0.01" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="filtro-rev-monto-max">Monto maximo (USD)</label>
+                                <input type="number" id="filtro-rev-monto-max" step="0.01" min="0">
+                            </div>
+                        </div>
+                        <div class="btn-row">
+                            <button id="btn-filtrar-rev" class="btn btn-primary">Aplicar filtros</button>
+                            <button id="btn-limpiar-rev" class="btn btn-outline">Limpiar</button>
+                        </div>
+                    </div>
+
+                    <h3 class="small-gap">Historial de Reventas</h3>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Fecha</th>
+                                    <th>Comprador / Cedula</th>
+                                    <th>Revendedora</th>
+                                    <th>Productos</th>
+                                    <th>Monto</th>
+                                    <th>Estado</th>
+                                    <th>Fecha pago</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-reventas"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ---------- PANEL: DISPONIBILIDAD (admin y revendedora) ---------- -->
+                <section id="panel-stock" class="card panel hidden">
+                    <h3>Disponibilidad para Revender</h3>
+                    <p class="subtitle">Productos entregados a la revendedora y que aun no ha vendido.</p>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Producto</th>
+                                    <th>Cantidad disponible</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-stock-revendedora"></tbody>
+                        </table>
+                    </div>
+
+                    <h3 class="small-gap">Inventario General (solo lectura)</h3>
+                    <p class="subtitle">Lo que hay en el almacen principal. Solo el admin puede editarlo.</p>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre</th>
+                                    <th>Cantidad</th>
+                                    <th>Precio Unit.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-inventario-lectura"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ---------- PANEL: DINERO / CAJA (admin) ---------- -->
+                <section id="panel-caja" class="card panel hidden">
+                    <h3>Dinero / Caja</h3>
+                    <p class="subtitle">Controla el dinero que entra (ventas) y lo que se paga (gastos). Solo tú lo ves.</p>
+
+                    <!-- Resumen: ingresos, gastos y saldo (USD + Bs) -->
+                    <div id="resumen-caja" class="resumen-caja"></div>
+
+                    <!-- Formulario para registrar un movimiento -->
+                    <div class="card-inner small-gap">
+                        <h3>Registrar movimiento</h3>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="caja-tipo">Tipo</label>
+                                <select id="caja-tipo">
+                                    <option value="ingreso">Ingreso (entra dinero)</option>
+                                    <option value="gasto">Gasto (sale dinero)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="caja-nombre">Nombre (a quién / de qué)</label>
+                                <input type="text" id="caja-nombre" placeholder="Ej. Ledismar Fuentes">
+                            </div>
+                        </div>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="caja-motivo">Motivo</label>
+                                <select id="caja-motivo"></select>
+                            </div>
+                            <div class="form-group hidden" id="caja-motivo-otro-group">
+                                <label for="caja-motivo-otro">Motivo personalizado</label>
+                                <input type="text" id="caja-motivo-otro" placeholder="Escribe el motivo">
+                            </div>
+                        </div>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="caja-moneda">Moneda</label>
+                                <select id="caja-moneda">
+                                    <option value="USD">Dolar ($)</option>
+                                    <option value="VES">Bolivares (Bs)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="caja-monto">Monto</label>
+                                <input type="number" id="caja-monto" step="0.01" min="0.01" placeholder="Ej. 240">
+                            </div>
+                        </div>
+                        <button id="btn-agregar-caja" class="btn btn-success btn-full">Guardar movimiento</button>
+                    </div>
+
+                    <!-- Historial de movimientos -->
+                    <div class="table-wrapper small-gap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Tipo</th>
+                                    <th>Nombre</th>
+                                    <th>Motivo</th>
+                                    <th>Monto (USD)</th>
+                                    <th>En Bs</th>
+                                    <th>Registró</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-caja"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ---------- PANEL: SESIONES (admin) ---------- -->
+                <section id="panel-sesiones" class="card panel hidden">
+                    <div class="card-header">
+                        <h3>Registro de Accesos (entradas y salidas)</h3>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Usuario</th>
+                                    <th>Rol</th>
+                                    <th>Entro</th>
+                                    <th>Salio</th>
+                                    <th>Notas</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-sesiones"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+            </main>
+        </div>
     </div>
 
     <script type="module" src="js/main.js"></script>

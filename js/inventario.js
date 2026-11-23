@@ -1,7 +1,34 @@
+// ============================================================================
+//  inventario.js - GESTION DEL INVENTARIO (solo admin)
+// ============================================================================
+//  Permite:
+//    - Registrar un producto nuevo (id, nombre, cantidad, precio).
+//    - Editar y eliminar productos existentes.
+//    - Importar/exportar el inventario desde/hacia un archivo .txt.
+//
+//  IMPORTANTE: el PRECIO que se guarda aqui SIEMPRE es en DOLARES (USD).
+//  Es la "base" sobre la cual se calculan Bs, Euro, Rupia y Yuan al mostrar.
+//
+//  Este modulo es SOLO del admin: la revendedora no ve estos botones.
+//  Aun asi, cada funcion valida el rol por seguridad.
+// ============================================================================
+
 import { db } from "./config.js";
 import { state } from "./state.js";
-import { mostrarAlerta, renderizarTodo } from "./ui.js";
+import { mostrarAlerta, renderizarTodo, renderizarInventario } from "./ui.js";
 
+// ----------------------------------------------------------------------------
+// Devuelve true si el usuario actual es admin (y por lo tanto puede editar).
+// ----------------------------------------------------------------------------
+function esAdmin() {
+    return state.usuarioActual && state.usuarioActual.rol !== "revendedora";
+}
+
+// ----------------------------------------------------------------------------
+// cargarInventario()
+// Trae el inventario desde Supabase y lo guarda en state.inventario.
+// El campo `precio` llega en USD.
+// ----------------------------------------------------------------------------
 export async function cargarInventario() {
     const { data, error } = await db
         .from("inventario")
@@ -17,13 +44,19 @@ export async function cargarInventario() {
         id: p.id,
         name: p.name,
         cantidad: Number(p.cantidad),
-        precio: Number(p.precio ?? 0)
+        precio: Number(p.precio ?? 0),
     }));
 
     return true;
 }
 
+// ----------------------------------------------------------------------------
+// activarModoEdicion(id)
+// Rellena el formulario con los datos de un producto para poder editarlo.
+// ----------------------------------------------------------------------------
 function activarModoEdicion(id) {
+    if (!esAdmin()) return;
+
     const prod = state.inventario.find(p => p.id === id);
     if (!prod) return;
 
@@ -31,7 +64,7 @@ function activarModoEdicion(id) {
 
     const inputId = document.getElementById("prod-id");
     inputId.value = prod.id;
-    inputId.disabled = true;
+    inputId.disabled = true; // No dejamos cambiar el ID al editar.
 
     document.getElementById("prod-nombre").value = prod.name;
     document.getElementById("prod-cantidad").value = prod.cantidad;
@@ -45,6 +78,10 @@ function activarModoEdicion(id) {
     document.getElementById("card-producto").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
+// ----------------------------------------------------------------------------
+// salirModoEdicion()
+// Restaura el formulario al estado "registrar producto nuevo".
+// ----------------------------------------------------------------------------
 function salirModoEdicion() {
     state.idEditando = null;
     document.getElementById("form-producto").reset();
@@ -55,7 +92,13 @@ function salirModoEdicion() {
     document.getElementById("card-producto").classList.remove("edit-mode");
 }
 
+// ----------------------------------------------------------------------------
+// eliminarProductoInventario(id)
+// Borra un producto del inventario en Supabase y refresca la pantalla.
+// ----------------------------------------------------------------------------
 async function eliminarProductoInventario(id) {
+    if (!esAdmin()) return;
+
     const { error } = await db
         .from("inventario")
         .delete()
@@ -73,6 +116,10 @@ async function eliminarProductoInventario(id) {
     mostrarAlerta(`Producto ${id} eliminado de la nube.`, "ok");
 }
 
+// ----------------------------------------------------------------------------
+// descargarTxt(nombre, contenido)
+// Descarga un texto como archivo .txt en el navegador.
+// ----------------------------------------------------------------------------
 function descargarTxt(nombreArchivo, contenido) {
     const blob = new Blob([contenido], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -85,20 +132,38 @@ function descargarTxt(nombreArchivo, contenido) {
     URL.revokeObjectURL(url);
 }
 
+// ----------------------------------------------------------------------------
+// inicializarInventario()
+// Conecta todos los botones y formularios de la seccion de inventario.
+// ----------------------------------------------------------------------------
 export function inicializarInventario() {
-    // Guardar nuevo producto o actualizar producto en edicion
+    // --- Busqueda en vivo del inventario (por nombre o ID) ---
+    // Al escribir, se filtra la tabla y se actualiza el resumen de totales.
+    const inputBusqueda = document.getElementById("buscar-inventario");
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener("input", () => {
+            state.busquedaInventario = inputBusqueda.value;
+            renderizarInventario();
+        });
+    }
+
+    // --- Guardar producto nuevo o actualizar el que se esta editando ---
     document.getElementById("form-producto").addEventListener("submit", async (e) => {
         e.preventDefault();
+        if (!esAdmin()) return;
+
         const id = document.getElementById("prod-id").value.trim().replace(/\s+/g, "");
         const name = document.getElementById("prod-nombre").value.trim().replace(/\s+/g, "_");
         const cantidad = parseFloat(document.getElementById("prod-cantidad").value);
-        const precio = parseFloat(document.getElementById("prod-precio").value);
+        const precio = parseFloat(document.getElementById("prod-precio").value); // USD
 
+        // Validamos que todos los campos sean correctos.
         if (!id || !name || isNaN(cantidad) || cantidad < 0 || isNaN(precio) || precio < 0) {
             mostrarAlerta("Completa todos los campos con valores validos.", "err");
             return;
         }
 
+        // --- Caso A: estamos EDITANDO un producto ---
         if (state.idEditando) {
             const { error } = await db
                 .from("inventario")
@@ -110,7 +175,7 @@ export function inicializarInventario() {
                 return;
             }
 
-            // Mantener sincronizado el carrito si el producto editado ya estaba agregado
+            // Mantener el carrito coherente si el producto editado ya estaba.
             state.listaVenta = state.listaVenta
                 .map(item => {
                     if (item.id !== state.idEditando) return item;
@@ -126,6 +191,8 @@ export function inicializarInventario() {
             return;
         }
 
+        // --- Caso B: producto NUEVO ---
+        // No permitir IDs duplicados.
         if (state.inventario.some(p => p.id === id)) {
             mostrarAlerta(`Error: ya existe un producto con el ID ${id}.`, "err");
             return;
@@ -146,9 +213,10 @@ export function inicializarInventario() {
         mostrarAlerta(`Producto ${name} (${id}) guardado en la nube.`, "ok");
     });
 
+    // --- Cancelar edicion ---
     document.getElementById("btn-cancelar-edicion").addEventListener("click", salirModoEdicion);
 
-    // Clics en Editar / Eliminar de la tabla
+    // --- Clics en Editar / Eliminar de la tabla ---
     document.getElementById("tbody-inventario").addEventListener("click", (e) => {
         const btn = e.target.closest("button[data-action]");
         if (!btn) return;
@@ -159,24 +227,29 @@ export function inicializarInventario() {
         }
     });
 
-    // Exportar .txt (formato compatible: cantidad nombre id precio)
+    // --- Exportar .txt (formato: cantidad nombre id precio) ---
     document.getElementById("btn-exportar-inv").addEventListener("click", () => {
+        if (!esAdmin()) return;
         const txt = state.inventario
             .map(p => `${p.cantidad.toFixed(2)} ${p.name} ${p.id} ${p.precio.toFixed(2)}`)
             .join("\n") + (state.inventario.length ? "\n" : "");
         descargarTxt("objetos_inventario.txt", txt);
     });
 
-    // Importar .txt (acepta tanto 3 columnas antiguas como 4 con precio)
+    // --- Importar .txt ---
     document.getElementById("btn-importar-inv").addEventListener("click", () => {
+        if (!esAdmin()) return;
         document.getElementById("input-importar-inv").click();
     });
 
     document.getElementById("input-importar-inv").addEventListener("change", (e) => {
+        if (!esAdmin()) return;
         const archivo = e.target.files[0];
         if (!archivo) return;
+
         const reader = new FileReader();
         reader.onload = async (ev) => {
+            // Parseamos cada linea: "cantidad nombre id [precio]".
             const filas = ev.target.result
                 .split(/\r?\n/)
                 .map(l => l.trim())
@@ -191,7 +264,7 @@ export function inicializarInventario() {
                         cantidad: parseFloat(partes[0]),
                         name: partes[1],
                         id: partes[2],
-                        precio
+                        precio,
                     };
                 })
                 .filter(p => p && !isNaN(p.cantidad));
