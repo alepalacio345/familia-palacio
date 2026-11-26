@@ -59,21 +59,29 @@ function etiquetaTipo(tipo) {
 }
 
 // ----------------------------------------------------------------------------
-// Dibuja el ENCABEZADO comun (barra oscura, titulo, id) de todo recibo.
+// Dibuja el ENCABEZADO comun de todo recibo.
+// Sin barra de color: texto oscuro sobre fondo blanco, para ahorrar tinta
+// cuando el recibo se imprime.
 // ----------------------------------------------------------------------------
 function dibujarEncabezado(doc, titulo, id) {
-    doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, 210, 32, "F");
-    doc.setTextColor(255, 255, 255);
+    doc.setTextColor(15, 23, 42);
     doc.setFontSize(16);
     doc.setFont(undefined, "bold");
-    doc.text(titulo, 14, 15);
+    doc.text(titulo, 14, 16);
     doc.setFont(undefined, "normal");
     doc.setFontSize(10);
+    doc.setTextColor(71, 85, 105);
     doc.text("Sistema de Inventario y Control de Entregas", 14, 23);
+    doc.setTextColor(15, 23, 42);
     doc.setFontSize(13);
     doc.setFont(undefined, "bold");
-    doc.text(String(id), 196, 18, { align: "right" });
+    doc.text(String(id), 196, 16, { align: "right" });
+
+    // Linea delgada separadora (mucho menos tinta que la barra rellena).
+    doc.setDrawColor(15, 23, 42);
+    doc.setLineWidth(0.4);
+    doc.line(14, 30, 196, 30);
+    doc.setLineWidth(0.2);
 }
 
 // ----------------------------------------------------------------------------
@@ -171,9 +179,12 @@ export function generarReciboPDF(entrega, itemsArray = null) {
         doc.setFont(undefined, "normal");
         doc.text(`Total de articulos: ${totalUnidades}`, 14, y + 4);
 
-        doc.setFillColor(15, 23, 42);
-        doc.roundedRect(126, y - 3, 70, 12, 2, 2, "F");
-        doc.setTextColor(255, 255, 255);
+        // Recuadro del total solo con borde (sin relleno oscuro).
+        doc.setDrawColor(15, 23, 42);
+        doc.setLineWidth(0.4);
+        doc.roundedRect(126, y - 3, 70, 12, 2, 2, "S");
+        doc.setLineWidth(0.2);
+        doc.setTextColor(15, 23, 42);
         doc.setFontSize(11);
         doc.setFont(undefined, "bold");
         doc.text("TOTAL:", 131, y + 5);
@@ -327,9 +338,12 @@ export function generarReciboReventaPDF(reventa, itemsArray = null) {
         doc.text(`Total de articulos: ${totalUnidades}`, 14, y + 4);
         doc.text(`Equivalente: ${formatearMonto(reventa.monto_bs || 0, "VES")}`, 14, y + 12);
 
-        doc.setFillColor(15, 23, 42);
-        doc.roundedRect(126, y - 3, 70, 12, 2, 2, "F");
-        doc.setTextColor(255, 255, 255);
+        // Recuadro del total solo con borde (sin relleno oscuro).
+        doc.setDrawColor(15, 23, 42);
+        doc.setLineWidth(0.4);
+        doc.roundedRect(126, y - 3, 70, 12, 2, 2, "S");
+        doc.setLineWidth(0.2);
+        doc.setTextColor(15, 23, 42);
         doc.setFontSize(11);
         doc.setFont(undefined, "bold");
         doc.text("TOTAL:", 131, y + 5);
